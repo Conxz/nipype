@@ -885,6 +885,7 @@ def run_command(runtime, timeout=0.1):
                              shell=True,
                              cwd=runtime.cwd,
                              env=runtime.environ)
+    '''
     streams = [
         Stream('stdout', proc.stdout),
         Stream('stderr', proc.stderr)
@@ -913,6 +914,11 @@ def run_command(runtime, timeout=0.1):
     runtime.stderr = '\n'.join(result['stderr'])
     runtime.stdout = '\n'.join(result['stdout'])
     runtime.merged = result['merged']
+    '''
+    o,e = proc.communicate()
+    runtime.stderr = e
+    runtime.stdout = o
+    runtime.returncode = proc.returncode
     return runtime
 
 
