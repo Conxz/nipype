@@ -3,7 +3,7 @@
 ============
  User Guide
 ============
-	
+
 :Release: |version|
 :Date: |today|
 
@@ -11,19 +11,36 @@
    :maxdepth: 2
 
    install
-   config_file
+   vagrant
+
    interface_tutorial
-   pipeline_tutorial
-   grabbing_and_sinking
-   function_interface
-   mapnode_and_iterables
    caching_tutorial
-   model_specification
+
+.. toctree::
+   :maxdepth: 1
+
+   pipeline_tutorial
    plugins
+   config_file
    debug
 
 
- 
+.. toctree::
+   :maxdepth: 1
+
+   grabbing_and_sinking
+   select_files
+   function_interface
+   mapnode_and_iterables
+   joinnode_and_itersource
+   model_specification
+   saving_workflows
+   spmmcr
+   mipav
+   nipypecmd
+   aws
+
+
 
 
 

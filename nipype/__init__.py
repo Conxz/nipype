@@ -1,108 +1,73 @@
-# emacs: -*- coding: utf-8; mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
-# vi: set fileencoding=utf-8 ft=python sts=4 ts=4 sw=4 et:
-"""
-Neuroimaging tools for Python (NIPY).
+# -*- coding: utf-8 -*-
+# emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
+# vi: set ft=python sts=4 ts=4 sw=4 et:
+from __future__ import print_function, division, unicode_literals, absolute_import
 
-The aim of NIPY is to produce a platform-independent Python environment for
-the analysis of brain imaging data using an open development model.
-
-The main website for NIPY is here:
-http://nipy.org/
-
-Nipype is the Neuroimaging in Python Pipelines and Interfaces package.
-It's aim is to create Python Interfaces to other neuroimaging packages
-and create an API for specifying a full analysis pipeline in Python.
-
-Interfaces
-
-    1. provide interface for using other packages through Python
-
-        a. fsl (fsl 4.0 and above) http://www.fmrib.ox.ac.uk/fsl/
-
-        b. spm (spm5, spm 8) http://www.fil.ion.ucl.ac.uk/spm/
-
-        c. freesurfer
-
-        d. afni
-
-    2. pipeline functionality for batch processing data
-
-        a. tools to construct hierarchically complex workflows for
-        analysis of neuroimaging data
-
-        b. execute workflows in parallel using IPython's parallel
-        computing interface
-
-        c. tools for interfacing databases, repositories
-
-        d. tools for provenance tracking
-
-Package Organization
-====================
-The nipy package contains the following subpackages and modules:
-
-.. packagetree::
-   :style: UML
-"""
-
-from version import version as __version__
-
-__status__   = 'alpha'
-__url__     = 'http://nipy.org/'
-
-
-
-# We require numpy 1.2 for our test suite.  If Tester fails to import,
-# check the version of numpy the user has and inform them they need to
-# upgrade.
-import numpy as np
+import os
 from distutils.version import LooseVersion
-if LooseVersion(np.__version__) >= '1.2':
-    from numpy.testing import Tester
-else:
-    from testing.numpytesting import Tester
 
-class NipypeTester(Tester):
-    def test(self, label='fast', verbose=1, extra_argv=None,
-             doctests=False, coverage=False):
-        # setuptools does a chmod +x on ALL python modules when it
-        # installs.  By default, as a security measure, nose refuses to
-        # import executable files.  To forse nose to execute our tests, we
-        # must supply the '--exe' flag.  List thread on this:
-        # http://www.mail-archive.com/distutils-sig@python.org/msg05009.html
-        if not extra_argv:
-            extra_argv = ['--exe']
-        else:
-            extra_argv.append('--exe')
-        super(NipypeTester, self).test(label, verbose, extra_argv,
-                                       doctests, coverage)
-    # Grab the docstring from numpy
-    #test.__doc__ = Tester.test.__doc__
+from .info import (LONG_DESCRIPTION as __doc__,
+                   URL as __url__,
+                   STATUS as __status__,
+                   __version__)
+from .utils.config import NipypeConfig
+from .fixes.numpy.testing import nosetester
+from .utils.logger import Logging
+from .refs import due
 
-test = NipypeTester().test
-bench = NipypeTester().bench
+try:
+    import faulthandler
+    faulthandler.enable()
+except (ImportError, IOError) as e:
+    pass
+
+config = NipypeConfig()
+logging = Logging(config)
 
 
-def _test_local_install():
-    """ Warn the user that running with nipy being
-        imported locally is a bad idea.
+class _NoseTester(nosetester.NoseTester):
+    """ Subclass numpy's NoseTester to add doctests by default
     """
-    import os
-    if os.getcwd() == os.sep.join(
-                            os.path.abspath(__file__).split(os.sep)[:-2]):
-        import warnings
-        warnings.warn('Running the tests from the install directory may '
-                     'trigger some failures')
 
-_test_local_install()
+    def _get_custom_doctester(self):
+        return None
 
-# Cleanup namespace
-del _test_local_install
+    def test(self, label='fast', verbose=1, extra_argv=['--exe'],
+             doctests=True, coverage=False):
+        """Run the full test suite
+
+        Examples
+        --------
+        This will run the test suite and stop at the first failing
+        example
+        >>> from nipype import test
+        >>> test(extra_argv=['--exe', '-sx'])  # doctest: +SKIP
+        """
+        return super(_NoseTester, self).test(label=label,
+                                             verbose=verbose,
+                                             extra_argv=extra_argv,
+                                             doctests=doctests,
+                                             coverage=coverage)
+
+try:
+    test = _NoseTester(raise_warnings="release").test
+except TypeError:
+    # Older versions of numpy do not have a raise_warnings argument
+    test = _NoseTester().test
+del nosetester
+
+# Set up package information function
+from .pkg_info import get_pkg_info as _get_pkg_info
+get_info = lambda: _get_pkg_info(os.path.dirname(__file__))
 
 # If this file is exec after being imported, the following lines will
 # fail
 try:
-    del version
     del Tester
 except:
     pass
+
+
+from .pipeline import Node, MapNode, JoinNode, Workflow
+from .interfaces import (DataGrabber, DataSink, SelectFiles,
+                         IdentityInterface, Rename, Function, Select, Merge)

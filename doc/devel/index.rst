@@ -15,8 +15,11 @@ conventions documented in the `NIPY Developers Guide
    :maxdepth: 2
 
    writing_custom_interfaces
-   gitwash/index   
+   gitwash/index
    architecture
+   provenance
+   software_using_nipype
+   testing_nipype
 
 
 .. include:: ../links_names.txt

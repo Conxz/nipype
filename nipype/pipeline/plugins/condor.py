@@ -1,11 +1,13 @@
+# -*- coding: utf-8 -*-
 """Parallel workflow execution via Condor
 """
+from __future__ import print_function, division, unicode_literals, absolute_import
 
 import os
+from time import sleep
 
+from ...interfaces.base import CommandLine
 from .base import (SGELikeBatchManagerBase, logger, iflogger, logging)
-
-from nipype.interfaces.base import CommandLine
 
 
 class CondorPlugin(SGELikeBatchManagerBase):
@@ -38,12 +40,13 @@ class CondorPlugin(SGELikeBatchManagerBase):
         if 'plugin_args' in kwargs and kwargs['plugin_args']:
             if 'retry_timeout' in kwargs['plugin_args']:
                 self._retry_timeout = kwargs['plugin_args']['retry_timeout']
-            if  'max_tries' in kwargs['plugin_args']:
+            if 'max_tries' in kwargs['plugin_args']:
                 self._max_tries = kwargs['plugin_args']['max_tries']
         super(CondorPlugin, self).__init__(template, **kwargs)
 
     def _is_pending(self, taskid):
-        cmd = CommandLine('condor_q')
+        cmd = CommandLine('condor_q',
+                          terminal_output='allatonce')
         cmd.inputs.args = '%d' % taskid
         # check condor cluster
         oldlevel = iflogger.level
@@ -55,9 +58,18 @@ class CondorPlugin(SGELikeBatchManagerBase):
         return False
 
     def _submit_batchtask(self, scriptfile, node):
-        cmd = CommandLine('condor_qsub', environ=os.environ.data)
+        cmd = CommandLine('condor_qsub', environ=dict(os.environ),
+                          terminal_output='allatonce')
         path = os.path.dirname(scriptfile)
         qsubargs = ''
+        if self._qsub_args:
+            qsubargs = self._qsub_args
+        if 'qsub_args' in node.plugin_args:
+            if 'overwrite' in node.plugin_args and\
+               node.plugin_args['overwrite']:
+                qsubargs = node.plugin_args['qsub_args']
+            else:
+                qsubargs += (" " + node.plugin_args['qsub_args'])
         if self._qsub_args:
             qsubargs = self._qsub_args
         if '-o' not in qsubargs:
@@ -65,11 +77,11 @@ class CondorPlugin(SGELikeBatchManagerBase):
         if '-e' not in qsubargs:
             qsubargs = '%s -e %s' % (qsubargs, path)
         if node._hierarchy:
-            jobname = '.'.join((os.environ.data['LOGNAME'],
+            jobname = '.'.join((dict(os.environ)['LOGNAME'],
                                 node._hierarchy,
                                 node._id))
         else:
-            jobname = '.'.join((os.environ.data['LOGNAME'],
+            jobname = '.'.join((dict(os.environ)['LOGNAME'],
                                 node._id))
         jobnameitems = jobname.split('.')
         jobnameitems.reverse()
@@ -83,7 +95,7 @@ class CondorPlugin(SGELikeBatchManagerBase):
         while True:
             try:
                 result = cmd.run()
-            except Exception, e:
+            except Exception as e:
                 if tries < self._max_tries:
                     tries += 1
                     sleep(self._retry_timeout)  # sleep 2 seconds and try again.

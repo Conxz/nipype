@@ -1,12 +1,13 @@
+# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
-Extend numpy's decorators to use nipy's gui and data labels.
+Extend numpy's decorators to use nipype's gui and data labels.
 """
 
 from numpy.testing.decorators import *
 
-from nipy.utils import templates, example_data, DataError
+from nibabel.data import DataError
 
 
 def make_label_dec(label, ds=None):
@@ -30,7 +31,7 @@ def make_label_dec(label, ds=None):
     Examples
     --------
     >>> slow = make_label_dec('slow')
-    >>> print slow.__doc__
+    >>> slow.__doc__
     Labels a test as 'slow'
 
     >>> rare = make_label_dec(['slow','hard'],
@@ -44,19 +45,20 @@ def make_label_dec(label, ds=None):
     >>> f.hard
     True
     """
-    if isinstance(label,basestring):
+    if isinstance(label, str):
         labels = [label]
     else:
         labels = label
     # Validate that the given label(s) are OK for use in setattr() by doing a
     # dry run on a dummy function.
-    tmp = lambda : None
+    tmp = lambda: None
     for label in labels:
-        setattr(tmp,label,True)
+        setattr(tmp, label, True)
     # This is the actual decorator we'll return
+
     def decor(f):
         for label in labels:
-            setattr(f,label,True)
+            setattr(f, label, True)
         return f
     # Apply the user's docstring
     if ds is None:
@@ -64,13 +66,9 @@ def make_label_dec(label, ds=None):
         decor.__doc__ = ds
     return decor
 
-
-# Nipy specific labels
-gui = make_label_dec('gui')
-data = make_label_dec('data')
-
-
 # For tests that need further review
+
+
 def needs_review(msg):
     """ Skip a test that needs further review.
 
@@ -94,12 +92,4 @@ def if_datasource(ds, msg):
         ds.get_filename()
     except DataError:
         return skipif(True, msg)
-    return lambda f : f
-
-
-def if_templates(f):
-    return if_datasource(templates, 'Cannot find template data')(f)
-
-
-def if_example_data(f):
-    return if_datasource(example_data, 'Cannot find example data')(f)
+    return lambda f: f

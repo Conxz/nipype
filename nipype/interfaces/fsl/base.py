@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """The fsl module provides classes for interfacing with the `FSL
@@ -24,17 +25,17 @@ Examples
 See the docstrings of the individual classes for examples.
 
 """
+from __future__ import print_function, division, unicode_literals, absolute_import
+from builtins import open, object
 
 from glob import glob
 import os
-import warnings
 
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (CommandLine, traits, CommandLineInputSpec,
-                                    isdefined)
+from ... import logging
+from ...utils.filemanip import fname_presuffix
+from ..base import traits, isdefined, CommandLine, CommandLineInputSpec
 
-warn = warnings.warn
-warnings.filterwarnings('always', category=UserWarning)
+LOGGER = logging.getLogger('interface')
 
 
 class Info(object):
@@ -72,9 +73,7 @@ class Info(object):
             basedir = os.environ['FSLDIR']
         except KeyError:
             return None
-        clout = CommandLine(command='cat',
-                            args='%s/etc/fslversion' % (basedir)).run()
-        out = clout.runtime.stdout
+        out = open('%s/etc/fslversion' % (basedir)).read()
         return out.strip('\n')
 
     @classmethod
@@ -113,7 +112,8 @@ class Info(object):
         try:
             return os.environ['FSLOUTPUTTYPE']
         except KeyError:
-            warnings.warn('FSL environment variables not set. setting output type to NIFTI')
+            LOGGER.warn('FSLOUTPUTTYPE environment variable is not set. '
+                        'Setting FSLOUTPUTTYPE=NIFTI')
             return 'NIFTI'
 
     @staticmethod
@@ -145,7 +145,7 @@ class FSLCommandInputSpec(CommandLineInputSpec):
     -------
     fsl.ExtractRoi(tmin=42, tsize=1, output_type='NIFTI')
     """
-    output_type = traits.Enum('NIFTI', Info.ftypes.keys(),
+    output_type = traits.Enum('NIFTI', list(Info.ftypes.keys()),
                               desc='FSL output type')
 
 
@@ -187,6 +187,10 @@ class FSLCommand(CommandLine):
             cls._output_type = output_type
         else:
             raise AttributeError('Invalid FSL output_type: %s' % output_type)
+
+    @property
+    def version(self):
+        return Info.version()
 
     def _gen_fname(self, basename, cwd=None, suffix=None, change_ext=True,
                    ext=None):
@@ -234,6 +238,9 @@ class FSLCommand(CommandLine):
                                 use_ext=False, newpath=cwd)
         return fname
 
+    def _overload_extension(self, value, name=None):
+        return value + Info.output_type_to_ext(self.inputs.output_type)
+
 
 def check_fsl():
     ver = Info.version()
@@ -248,14 +255,13 @@ def no_fsl():
     used with skipif to skip tests that will
     fail if FSL is not installed"""
 
-    if Info.version() == None:
+    if Info.version() is None:
         return True
     else:
         return False
 
 
 def no_fsl_course_data():
-    """check if FSL_COURSE_DATA is defined and point to a valid directory"""
-
-    return not ("FSL_COURSE_DATA" in os.environ and
-                os.path.isdir(os.environ["FSL_COURSE_DATA"]))
+    """check if fsl_course data is present"""
+    return not ('FSL_COURSE_DATA' in os.environ and
+                os.path.isdir(os.path.abspath(os.environ['FSL_COURSE_DATA'])))

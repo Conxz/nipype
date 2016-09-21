@@ -3,21 +3,23 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Script to auto-generate interface docs.
 """
+from __future__ import print_function, unicode_literals
 # stdlib imports
 import os
 import sys
 
-#*****************************************************************************
+# *****************************************************************************
 if __name__ == '__main__':
     nipypepath = os.path.abspath('..')
-    sys.path.insert(1,nipypepath)
+    sys.path.insert(1, nipypepath)
     # local imports
     from interfacedocgen import InterfaceHelpWriter
     package = 'nipype'
-    outdir = os.path.join('interfaces','generated')
+    outdir = os.path.join('interfaces', 'generated')
     docwriter = InterfaceHelpWriter(package)
     # Packages that should not be included in generated API docs.
     docwriter.package_skip_patterns += ['\.external$',
+                                        '\.fixes$',
                                         '\.utils$',
                                         '\.pipeline',
                                         '\.testing',
@@ -25,22 +27,25 @@ if __name__ == '__main__':
                                         ]
     # Modules that should not be included in generated API docs.
     docwriter.module_skip_patterns += ['\.version$',
-                                       '\.interfaces\.afni$',
                                        '\.interfaces\.base$',
                                        '\.interfaces\.matlab$',
                                        '\.interfaces\.rest$',
                                        '\.interfaces\.pymvpa$',
+                                       '\.interfaces\.slicer\.generate_classes$',
+                                       '\.interfaces\.spm\.base$',
                                        '\.interfaces\.traits',
                                        '\.pipeline\.alloy$',
                                        '\.pipeline\.s3_node_wrapper$',
                                        '.\testing',
                                        ]
-    docwriter.class_skip_patterns += ['FSL',
+    docwriter.class_skip_patterns += ['AFNI',
+                                      'ANTS',
+                                      'FSL',
                                       'FS',
-                                      'Spm',
+                                      'Info',
+                                      '^SPM',
                                       'Tester',
                                       'Spec$',
-                                      'afni',
                                       'Numpy'
                                       # NipypeTester raises an
                                       # exception when instantiated in
@@ -49,4 +54,4 @@ if __name__ == '__main__':
                                       ]
     docwriter.write_api_docs(outdir)
     docwriter.write_index(outdir, 'gen', relative_to='interfaces')
-    print '%d files written' % len(docwriter.written_modules)
+    print('%d files written' % len(docwriter.written_modules))

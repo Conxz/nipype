@@ -1,28 +1,41 @@
+# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
     The maths module provides higher-level interfaces to some of the operations
     that can be performed with the fslmaths command-line program.
-"""
 
+    Change directory to provide relative paths for doctests
+    >>> import os
+    >>> filepath = os.path.dirname( os.path.realpath( __file__ ) )
+    >>> datadir = os.path.realpath(os.path.join(filepath, '../../testing/data'))
+    >>> os.chdir(datadir)
+"""
+from __future__ import print_function, division, unicode_literals, absolute_import
+import os
 import numpy as np
 
-from nipype.interfaces.fsl.base import FSLCommand, FSLCommandInputSpec
-from nipype.interfaces.base import (TraitedSpec, File, traits, InputMultiPath,
-                                    isdefined)
+from ..base import (TraitedSpec, File, traits, InputMultiPath, isdefined)
+from .base import FSLCommand, FSLCommandInputSpec
 
 
 class MathsInput(FSLCommandInputSpec):
 
     in_file = File(position=2, argstr="%s", exists=True, mandatory=True,
-                desc="image to operate on")
-    out_file = File(genfile=True, position=-2, argstr="%s", desc="image to write")
+                   desc="image to operate on")
+    out_file = File(genfile=True, position=-2, argstr="%s",
+                    desc="image to write", hash_files=False)
     _dtypes = ["float", "char", "int", "short", "double", "input"]
     internal_datatype = traits.Enum(*_dtypes, position=1, argstr="-dt %s",
-                                    desc="datatype to use for calculations (default is float)")
+                                    desc=("datatype to use for calculations "
+                                          "(default is float)"))
     output_datatype = traits.Enum(*_dtypes,
                                   position=-1, argstr="-odt %s",
-                                  desc="datatype to use for output (default uses input type)")
+                                  desc=("datatype to use for output (default "
+                                        "uses input type)"))
+
+    nan2zeros = traits.Bool(position=3, argstr='-nan',
+                            desc='change NaNs to zeros before doing anything')
 
 
 class MathsOutput(TraitedSpec):
@@ -41,7 +54,9 @@ class MathsCommand(FSLCommand):
         outputs = self.output_spec().get()
         outputs["out_file"] = self.inputs.out_file
         if not isdefined(self.inputs.out_file):
-            outputs["out_file"] = self._gen_fname(self.inputs.in_file, suffix=self._suffix)
+            outputs["out_file"] = self._gen_fname(self.inputs.in_file,
+                                                  suffix=self._suffix)
+        outputs["out_file"] = os.path.abspath(outputs["out_file"])
         return outputs
 
     def _gen_filename(self, name):
@@ -54,7 +69,8 @@ class ChangeDataTypeInput(MathsInput):
 
     _dtypes = ["float", "char", "int", "short", "double", "input"]
     output_datatype = traits.Enum(*_dtypes,
-                                  position=-1, argstr="-odt %s", mandatory=True,
+                                  position=-1, argstr="-odt %s",
+                                  mandatory=True,
                                   desc="output data type")
 
 
@@ -68,13 +84,15 @@ class ChangeDataType(MathsCommand):
 
 class ThresholdInputSpec(MathsInput):
 
-    thresh = traits.Float(mandatory=True, position=3, argstr="%s",
+    thresh = traits.Float(mandatory=True, position=4, argstr="%s",
                           desc="threshold value")
     direction = traits.Enum("below", "above", usedefault=True,
                             desc="zero-out either below or above thresh value")
-    use_robust_range = traits.Bool(desc="inteperet thresh as percentage (0-100) of robust range")
-    use_nonzero_voxels = traits.Bool(desc="use nonzero voxels to caluclate robust range",
-                                     requires=["use_robust_range"])
+    use_robust_range = traits.Bool(
+        desc="interpret thresh as percentage (0-100) of robust range")
+    use_nonzero_voxels = traits.Bool(
+        desc="use nonzero voxels to calculate robust range",
+        requires=["use_robust_range"])
 
 
 class Threshold(MathsCommand):
@@ -92,7 +110,8 @@ class Threshold(MathsCommand):
                 arg += "u"
             arg += "thr"
             if isdefined(_si.use_robust_range) and _si.use_robust_range:
-                if isdefined(_si.use_nonzero_voxels) and _si.use_nonzero_voxels:
+                if (isdefined(_si.use_nonzero_voxels) and
+                        _si.use_nonzero_voxels):
                     arg += "P"
                 else:
                     arg += "p"
@@ -101,9 +120,25 @@ class Threshold(MathsCommand):
         return super(Threshold, self)._format_arg(name, spec, value)
 
 
+class StdImageInput(MathsInput):
+
+    dimension = traits.Enum("T", "X", "Y", "Z", usedefault=True,
+                            argstr="-%sstd", position=4,
+                            desc="dimension to standard deviate across")
+
+
+class StdImage(MathsCommand):
+    """Use fslmaths to generate a standard deviation in an image across a given
+    dimension.
+    """
+    input_spec = StdImageInput
+    _suffix = "_std"
+
+
 class MeanImageInput(MathsInput):
 
-    dimension = traits.Enum("T", "X", "Y", "Z", usedefault=True, argstr="-%smean", position=3,
+    dimension = traits.Enum("T", "X", "Y", "Z", usedefault=True,
+                            argstr="-%smean", position=4,
                             desc="dimension to mean across")
 
 
@@ -115,12 +150,38 @@ class MeanImage(MathsCommand):
     _suffix = "_mean"
 
 
+class MaxImageInput(MathsInput):
+
+    dimension = traits.Enum("T", "X", "Y", "Z", usedefault=True,
+                            argstr="-%smax", position=4,
+                            desc="dimension to max across")
+
+
+class MaxImage(MathsCommand):
+    """Use fslmaths to generate a max image across a given dimension.
+
+    Examples
+    --------
+    >>> from nipype.interfaces.fsl.maths import MaxImage
+    >>> maxer = MaxImage()
+    >>> maxer.inputs.in_file = "functional.nii"  # doctest: +SKIP
+    >>> maxer.dimension = "T"
+    >>> maxer.cmdline  # doctest: +SKIP
+    'fslmaths functional.nii -Tmax functional_max.nii'
+
+    """
+    input_spec = MaxImageInput
+    _suffix = "_max"
+
+
 class IsotropicSmoothInput(MathsInput):
 
-    fwhm = traits.Float(mandatory=True, xor=["sigma"], position=3, argstr="-s %.5f",
-                        desc="fwhm of smoothing kernel")
-    sigma = traits.Float(mandatory=True, xor=["fwhm"], position=3, argstr="-s %.5f",
-                         desc="sigma of smoothing kernel")
+    fwhm = traits.Float(mandatory=True, xor=["sigma"],
+                        position=4, argstr="-s %.5f",
+                        desc="fwhm of smoothing kernel [mm]")
+    sigma = traits.Float(mandatory=True, xor=["fwhm"],
+                         position=4, argstr="-s %.5f",
+                         desc="sigma of smoothing kernel [mm]")
 
 
 class IsotropicSmooth(MathsCommand):
@@ -139,8 +200,8 @@ class IsotropicSmooth(MathsCommand):
 
 class ApplyMaskInput(MathsInput):
 
-    mask_file = File(exists=True, mandatory=True, argstr="-mas %s", position=3,
-                      desc="binary image defining mask space")
+    mask_file = File(exists=True, mandatory=True, argstr="-mas %s", position=4,
+                     desc="binary image defining mask space")
 
 
 class ApplyMask(MathsCommand):
@@ -153,17 +214,22 @@ class ApplyMask(MathsCommand):
 
 class KernelInput(MathsInput):
 
-    kernel_shape = traits.Enum("3D", "2D", "box", "boxv", "gauss", "sphere", "file",
-                               argstr="-kernel %s", position=3, desc="kernel shape to use")
-    kernel_size = traits.Float(argstr="%.4f", position=4, xor=["kernel_file"],
-                             desc="kernel size - voxels for box/boxv, mm for sphere, mm sigma for gauss")
-    kernel_file = File(exists=True, argstr="%s", position=4, xor=["kernel_size"],
+    kernel_shape = traits.Enum("3D", "2D", "box", "boxv", "gauss", "sphere",
+                               "file",
+                               argstr="-kernel %s", position=4,
+                               desc="kernel shape to use")
+    kernel_size = traits.Float(argstr="%.4f", position=5, xor=["kernel_file"],
+                               desc=("kernel size - voxels for box/boxv, mm "
+                                     "for sphere, mm sigma for gauss"))
+    kernel_file = File(exists=True, argstr="%s", position=5,
+                       xor=["kernel_size"],
                        desc="use external file for kernel")
 
 
 class DilateInput(KernelInput):
 
-    operation = traits.Enum("mean", "modal", "max", argstr="-dil%s", position=5, mandatory=True,
+    operation = traits.Enum("mean", "modal", "max", argstr="-dil%s",
+                            position=6, mandatory=True,
                             desc="filtering operation to perfoem in dilation")
 
 
@@ -182,8 +248,10 @@ class DilateImage(MathsCommand):
 
 class ErodeInput(KernelInput):
 
-    minimum_filter = traits.Bool(argstr="%s", position=5, usedefault=True, default_value=False,
-                                 desc="if true, minimum filter rather than erosion by zeroing-out")
+    minimum_filter = traits.Bool(argstr="%s", position=6, usedefault=True,
+                                 default_value=False,
+                                 desc=("if true, minimum filter rather than "
+                                       "erosion by zeroing-out"))
 
 
 class ErodeImage(MathsCommand):
@@ -203,7 +271,8 @@ class ErodeImage(MathsCommand):
 
 class SpatialFilterInput(KernelInput):
 
-    operation = traits.Enum("mean", "median", "meanu", argstr="-f%s", position=5, mandatory=True,
+    operation = traits.Enum("mean", "median", "meanu", argstr="-f%s",
+                            position=6, mandatory=True,
                             desc="operation to filter with")
 
 
@@ -217,8 +286,11 @@ class SpatialFilter(MathsCommand):
 
 class UnaryMathsInput(MathsInput):
 
-    operation = traits.Enum("exp", "log", "sin", "cos", "sqr", "sqrt", "recip", "abs", "bin", "index",
-                            argstr="-%s", position=3, mandatory=True,
+    operation = traits.Enum("exp", "log", "sin", "cos", "tan", "asin", "acos",
+                            "atan", "sqr", "sqrt", "recip", "abs", "bin",
+                            "binv", "fillh", "fillh26", "index", "edge", "nan",
+                            "nanm", "rand", "randn", "range",
+                            argstr="-%s", position=4, mandatory=True,
                             desc="operation to perform")
 
 
@@ -236,16 +308,19 @@ class UnaryMaths(MathsCommand):
 class BinaryMathsInput(MathsInput):
 
     operation = traits.Enum("add", "sub", "mul", "div", "rem", "max", "min",
-                            mandatory=True, argstr="-%s", position=3,
+                            mandatory=True, argstr="-%s", position=4,
                             desc="operation to perform")
-    operand_file = File(exists=True, argstr="%s", mandatory=True, position=4, xor=["operand_value"],
+    operand_file = File(exists=True, argstr="%s", mandatory=True,
+                        position=5, xor=["operand_value"],
                         desc="second image to perform operation with")
-    operand_value = traits.Float(argstr="%.8f", mandatory=True, position=4, xor=["operand_file"],
+    operand_value = traits.Float(argstr="%.8f", mandatory=True,
+                                 position=5, xor=["operand_file"],
                                  desc="value to perform operation with")
 
 
 class BinaryMaths(MathsCommand):
-    """Use fslmaths to perform mathematical operations using a second image or a numeric value.
+    """Use fslmaths to perform mathematical operations using a second image or
+    a numeric value.
 
     """
     input_spec = BinaryMathsInput
@@ -253,10 +328,12 @@ class BinaryMaths(MathsCommand):
 
 class MultiImageMathsInput(MathsInput):
 
-    op_string = traits.String(position=3, argstr="%s", mandatory=True,
-                              desc="python formatted string of operations to perform")
+    op_string = traits.String(position=4, argstr="%s", mandatory=True,
+                              desc=("python formatted string of operations "
+                                    "to perform"))
     operand_files = InputMultiPath(File(exists=True), mandatory=True,
-                                 desc="list of file names to plug into op string")
+                                   desc=("list of file names to plug into op "
+                                         "string"))
 
 
 class MultiImageMaths(MathsCommand):
@@ -264,14 +341,14 @@ class MultiImageMaths(MathsCommand):
 
     Examples
     --------
-    from nipype.interfaces.fsl import MultiImageMaths
-    maths = MultiImageMaths()
-    maths.inputs.in_file = "functional.nii"
-    maths.inputs.op_string = "-add %s -mul -1 -div %s"
-    maths.inputs.operand_files = ["functional2.nii", "functional3.nii"]
-    maths.inputs.out_file = functional4.nii
-    maths.cmdline
-    fslmaths functional1.nii -add functional2.nii -mul -1 -div functional3.nii functional4.nii
+    >>> from nipype.interfaces.fsl import MultiImageMaths
+    >>> maths = MultiImageMaths()
+    >>> maths.inputs.in_file = "functional.nii"
+    >>> maths.inputs.op_string = "-add %s -mul -1 -div %s"
+    >>> maths.inputs.operand_files = ["functional2.nii", "functional3.nii"]
+    >>> maths.inputs.out_file = "functional4.nii"
+    >>> maths.cmdline # doctest: +IGNORE_UNICODE
+    'fslmaths functional.nii -add functional2.nii -mul -1 -div functional3.nii functional4.nii'
 
     """
     input_spec = MultiImageMathsInput
@@ -284,14 +361,17 @@ class MultiImageMaths(MathsCommand):
 
 class TemporalFilterInput(MathsInput):
 
-    lowpass_sigma = traits.Float(-1, argstr="%.6f", position=4, usedefault=True,
+    lowpass_sigma = traits.Float(-1, argstr="%.6f", position=5,
+                                 usedefault=True,
                                  desc="lowpass filter sigma (in volumes)")
-    highpass_sigma = traits.Float(-1, argstr="-bptf %.6f", position=3, usedefault=True,
+    highpass_sigma = traits.Float(-1, argstr="-bptf %.6f", position=4,
+                                  usedefault=True,
                                   desc="highpass filter sigma (in volumes)")
 
 
 class TemporalFilter(MathsCommand):
-    """Use fslmaths to apply a low, high, or bandpass temporal filter to a timeseries.
+    """Use fslmaths to apply a low, high, or bandpass temporal filter to a
+    timeseries.
 
     """
     input_spec = TemporalFilterInput
